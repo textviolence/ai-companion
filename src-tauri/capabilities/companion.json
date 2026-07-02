@@ -1,0 +1,23 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "companion",
+  "description": "Companion: managing its own window and the chat/settings windows, cursor hit-testing, global hotkey, native menu, and exit.",
+  "windows": ["companion"],
+  "permissions": [
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:window:allow-set-ignore-cursor-events",
+    "core:window:allow-start-dragging",
+    "core:window:allow-cursor-position",
+    "core:window:allow-current-monitor",
+    "core:menu:allow-new",
+    "core:menu:allow-popup",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-unregister-all",
+    "process:allow-exit",
+    "dialog:allow-message"
+  ]
+}

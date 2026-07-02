@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Shared baseline for all windows: core API (events, window getters, menu) and the store.",
+  "windows": ["onboarding", "companion", "chat", "settings"],
+  "permissions": ["core:default", "store:default"]
+}

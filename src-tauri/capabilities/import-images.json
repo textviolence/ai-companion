@@ -1,0 +1,27 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "import-images",
+  "description": "Onboarding and settings: picking an image via a dialog and copying it into $APPDATA/images. The source path is authorized by the dialog itself (runtime scope); only destination paths are listed here.",
+  "windows": ["onboarding", "settings"],
+  "permissions": [
+    "dialog:allow-open",
+    "core:window:allow-hide",
+    "process:allow-exit",
+    {
+      "identifier": "fs:allow-copy-file",
+      "allow": [{ "path": "$APPDATA/images/**" }]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [{ "path": "$APPDATA" }, { "path": "$APPDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [{ "path": "$APPDATA" }, { "path": "$APPDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-remove",
+      "allow": [{ "path": "$APPDATA/images/**" }]
+    }
+  ]
+}
