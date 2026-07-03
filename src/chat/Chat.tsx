@@ -26,6 +26,7 @@ export function Chat() {
   const abortRef = useRef<AbortController | null>(null)
   const hideTimerRef = useRef<number | undefined>(undefined)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const generationRef = useRef(0)
 
   const clearHideTimer = useCallback(() => {
     window.clearTimeout(hideTimerRef.current)
@@ -43,6 +44,7 @@ export function Chat() {
   }, [clearHideTimer])
 
   const resetForNewQuestion = useCallback(() => {
+    generationRef.current += 1
     abortRef.current?.abort()
     stopSpeech()
     clearHideTimer()
@@ -57,6 +59,7 @@ export function Chat() {
   }, [clearHideTimer])
 
   const hideChat = useCallback(() => {
+    generationRef.current += 1
     abortRef.current?.abort()
     stopSpeech()
     clearHideTimer()
@@ -86,6 +89,8 @@ export function Chat() {
     const text = draft.trim()
     if (!text || inFlightRef.current) return
     inFlightRef.current = true
+    generationRef.current += 1
+    const generation = generationRef.current
     clearHideTimer()
     stopSpeech()
     const controller = new AbortController()
@@ -122,13 +127,18 @@ export function Chat() {
         controller.signal,
       )
       setPhase('done')
-      scheduleHide()
       await appendExchange(text, full)
       if (settings.tts.enabled && settings.tts.apiKey) {
-        speak(settings.tts, full).catch((err) => {
-          console.error('Speech failed:', err)
-          setTtsError(err instanceof Error ? err.message : String(err))
-        })
+        speak(settings.tts, full)
+          .catch((err) => {
+            console.error('Speech failed:', err)
+            setTtsError(err instanceof Error ? err.message : String(err))
+          })
+          .finally(() => {
+            if (generationRef.current === generation) scheduleHide()
+          })
+      } else {
+        scheduleHide()
       }
       extractFact(settings.llm, text, full).catch((err) => console.error('Fact extraction failed:', err))
     } catch (err) {

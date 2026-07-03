@@ -6,6 +6,7 @@ const FISH_MODEL = 's2.1-pro-free'
 
 let currentAudio: HTMLAudioElement | null = null
 let currentUrl: string | null = null
+let onStopped: (() => void) | null = null
 
 export async function speak(cfg: TtsSettings, text: string): Promise<void> {
   stopSpeech()
@@ -27,11 +28,23 @@ export async function speak(cfg: TtsSettings, text: string): Promise<void> {
   }
   const blob = new Blob([await response.arrayBuffer()], { type: 'audio/mpeg' })
   currentUrl = URL.createObjectURL(blob)
-  currentAudio = new Audio(currentUrl)
-  await currentAudio.play()
+  const audio = new Audio(currentUrl)
+  currentAudio = audio
+  try {
+    await new Promise<void>((resolve, reject) => {
+      onStopped = () => resolve()
+      audio.addEventListener('ended', () => resolve(), { once: true })
+      audio.addEventListener('error', () => reject(new Error('Audio playback failed')), { once: true })
+      audio.play().catch(reject)
+    })
+  } finally {
+    onStopped = null
+  }
 }
 
 export function stopSpeech(): void {
+  onStopped?.()
+  onStopped = null
   if (currentAudio) {
     currentAudio.pause()
     currentAudio = null
