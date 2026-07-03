@@ -24,6 +24,7 @@ export interface BehaviorSettings {
 export interface ImageSettings {
   companion: string
   thinking: string
+  speaking: string
 }
 
 export interface ProactiveSettings {
@@ -59,6 +60,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   images: {
     companion: '',
     thinking: '',
+    speaking: '',
   },
   proactive: {
     enabled: false,

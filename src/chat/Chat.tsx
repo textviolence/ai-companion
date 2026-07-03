@@ -48,22 +48,28 @@ export function Chat() {
     abortRef.current?.abort()
     stopSpeech()
     clearHideTimer()
+    emit(EVENT_STATE_CHANGED, 'idle').catch((err) => console.error('Failed to emit idle state:', err))
     return generationRef.current
   }, [clearHideTimer])
 
   const finishAnswer = useCallback(
     (settings: AppSettings, text: string, generation: number) => {
       if (settings.tts.enabled && settings.tts.apiKey) {
+        emit(EVENT_STATE_CHANGED, 'speaking').catch((err) => console.error('Failed to emit speaking state:', err))
         speak(settings.tts, text)
           .catch((err) => {
             console.error('Speech failed:', err)
             setTtsError(err instanceof Error ? err.message : String(err))
           })
           .finally(() => {
-            if (generationRef.current === generation) scheduleHide()
+            if (generationRef.current === generation) {
+              scheduleHide()
+              emit(EVENT_STATE_CHANGED, 'idle').catch((err) => console.error('Failed to emit idle state:', err))
+            }
           })
       } else {
         scheduleHide()
+        emit(EVENT_STATE_CHANGED, 'idle').catch((err) => console.error('Failed to emit idle state:', err))
       }
     },
     [scheduleHide],
@@ -173,10 +179,10 @@ export function Chat() {
         setError(err instanceof Error ? err.message : String(err))
         setPhase('error')
         scheduleHide()
+        await emit(EVENT_STATE_CHANGED, 'idle')
       }
     } finally {
       inFlightRef.current = false
-      await emit(EVENT_STATE_CHANGED, 'idle')
     }
   }, [draft, clearHideTimer, scheduleHide, finishAnswer])
 

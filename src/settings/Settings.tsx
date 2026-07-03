@@ -76,7 +76,7 @@ export function Settings() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
-  const persistedImagesRef = useRef<ImageSettings>({ companion: '', thinking: '' })
+  const persistedImagesRef = useRef<ImageSettings>({ companion: '', thinking: '', speaking: '' })
 
   useEffect(() => {
     loadSettings().then(
@@ -140,8 +140,8 @@ export function Settings() {
     try {
       await saveSettings(settings)
       const previous = persistedImagesRef.current
-      const referenced = new Set([settings.images.companion, settings.images.thinking])
-      for (const old of [previous.companion, previous.thinking]) {
+      const referenced = new Set([settings.images.companion, settings.images.thinking, settings.images.speaking])
+      for (const old of [previous.companion, previous.thinking, previous.speaking]) {
         if (old && !referenced.has(old)) await removeImage(old)
       }
       persistedImagesRef.current = { ...settings.images }
@@ -290,6 +290,19 @@ export function Settings() {
               </Button>
               {settings.images.thinking && (
                 <Button variant="ghost" size="sm" onClick={() => update('images', { thinking: '' })} disabled={busy}>
+                  Remove
+                </Button>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <ImagePreview fileName={settings.images.speaking} />
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => void pickImage('speaking')} disabled={busy}>
+                {settings.images.speaking ? 'Replace speaking…' : 'Choose speaking…'}
+              </Button>
+              {settings.images.speaking && (
+                <Button variant="ghost" size="sm" onClick={() => update('images', { speaking: '' })} disabled={busy}>
                   Remove
                 </Button>
               )}

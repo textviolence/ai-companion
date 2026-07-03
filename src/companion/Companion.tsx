@@ -102,7 +102,9 @@ export function Companion() {
 
   const companionImage = settings?.images.companion ?? ''
   const thinkingImage = settings?.images.thinking ?? ''
-  const activeImage = state === 'thinking' && thinkingImage ? thinkingImage : companionImage
+  const speakingImage = settings?.images.speaking ?? ''
+  const activeImage =
+    (state === 'thinking' && thinkingImage) || (state === 'speaking' && speakingImage) || companionImage
 
   useEffect(() => {
     if (!activeImage) return
