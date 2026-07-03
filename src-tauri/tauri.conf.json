@@ -52,6 +52,21 @@
         "visible": false
       },
       {
+        "label": "bubble",
+        "url": "/bubble.html",
+        "title": "AI Companion — Bubble",
+        "width": 280,
+        "height": 140,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false,
+        "visible": false
+      },
+      {
         "label": "settings",
         "url": "/settings.html",
         "title": "AI Companion — Settings",

@@ -7,7 +7,7 @@ import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { message } from '@tauri-apps/plugin-dialog'
 import { register, unregisterAll, type ShortcutEvent } from '@tauri-apps/plugin-global-shortcut'
 import { exit } from '@tauri-apps/plugin-process'
-import { EVENT_ASK_REQUESTED, EVENT_PROACTIVE_START, EVENT_SETTINGS_UPDATED, EVENT_STATE_CHANGED, type CompanionState } from '../shared/events'
+import { EVENT_ASK_REQUESTED, EVENT_BUBBLE_HIDE, EVENT_BUBBLE_SHOW, EVENT_SETTINGS_UPDATED, EVENT_STATE_CHANGED, type CompanionState } from '../shared/events'
 import { imageUrl } from '../shared/images'
 import { appendAssistantMessage } from '../shared/memory'
 import { checkProactiveMoment } from '../shared/proactive'
@@ -19,6 +19,8 @@ const SCREEN_MARGIN = 16
 const CHAT_GAP = 12
 const CHAT_WIDTH = 360
 const CHAT_HEIGHT = 240
+const BUBBLE_WIDTH = 280
+const BUBBLE_HEIGHT = 140
 const ALPHA_THRESHOLD = 10
 const HIT_TEST_INTERVAL_MS = 40
 
@@ -33,7 +35,7 @@ async function openSettingsWindow(): Promise<void> {
   await settingsWindow?.setFocus()
 }
 
-async function positionChatWindow(chat: WebviewWindow): Promise<void> {
+async function positionNearCompanion(win: WebviewWindow, width: number, height: number): Promise<void> {
   const companion = getCurrentWindow()
   const [position, size, monitor, scale] = await Promise.all([
     companion.outerPosition(),
@@ -41,36 +43,36 @@ async function positionChatWindow(chat: WebviewWindow): Promise<void> {
     currentMonitor(),
     companion.scaleFactor(),
   ])
-  const chatW = Math.round(CHAT_WIDTH * scale)
-  const chatH = Math.round(CHAT_HEIGHT * scale)
+  const w = Math.round(width * scale)
+  const h = Math.round(height * scale)
   const gap = Math.round(CHAT_GAP * scale)
-  let x = position.x + Math.round(size.width / 2) - Math.round(chatW / 2)
-  let y = position.y - chatH - gap
+  let x = position.x + Math.round(size.width / 2) - Math.round(w / 2)
+  let y = position.y - h - gap
   if (monitor) {
     const area = monitor.workArea
     if (y < area.position.y) y = position.y + size.height + gap
-    x = Math.min(Math.max(x, area.position.x), area.position.x + area.size.width - chatW)
-    y = Math.min(Math.max(y, area.position.y), area.position.y + area.size.height - chatH)
+    x = Math.min(Math.max(x, area.position.x), area.position.x + area.size.width - w)
+    y = Math.min(Math.max(y, area.position.y), area.position.y + area.size.height - h)
   }
-  await chat.setPosition(new PhysicalPosition(x, y))
+  await win.setPosition(new PhysicalPosition(x, y))
 }
 
 async function openChatWindow(): Promise<void> {
   const chat = await WebviewWindow.getByLabel('chat')
   if (!chat) return
-  await positionChatWindow(chat)
+  await positionNearCompanion(chat, CHAT_WIDTH, CHAT_HEIGHT)
+  await emit(EVENT_BUBBLE_HIDE)
   await emit(EVENT_ASK_REQUESTED)
   await chat.show()
   await chat.setFocus()
 }
 
-async function openChatWindowWithTopic(topic: string): Promise<void> {
-  const chat = await WebviewWindow.getByLabel('chat')
-  if (!chat) return
-  await positionChatWindow(chat)
-  await emit(EVENT_PROACTIVE_START, topic)
-  await chat.show()
-  await chat.setFocus()
+async function openBubbleWindow(topic: string): Promise<void> {
+  const bubble = await WebviewWindow.getByLabel('bubble')
+  if (!bubble) return
+  await positionNearCompanion(bubble, BUBBLE_WIDTH, BUBBLE_HEIGHT)
+  await emit(EVENT_BUBBLE_SHOW, topic)
+  await bubble.show()
 }
 
 export function Companion() {
@@ -188,15 +190,17 @@ export function Companion() {
       busy = true
       try {
         const chat = await WebviewWindow.getByLabel('chat')
-        if (!chat || (await chat.isVisible())) return
+        const bubble = await WebviewWindow.getByLabel('bubble')
+        if (!chat || !bubble) return
+        if ((await chat.isVisible()) || (await bubble.isVisible())) return
         const cfg = settingsRef.current
         if (!cfg) return
         const dataUrl = await captureScreen()
         const topic = await checkProactiveMoment(cfg.llm, cfg.behavior.systemPrompt, dataUrl)
         if (!topic) return
-        if (await chat.isVisible()) return
+        if ((await chat.isVisible()) || (await bubble.isVisible())) return
         await appendAssistantMessage(topic)
-        await openChatWindowWithTopic(topic)
+        await openBubbleWindow(topic)
       } catch (err) {
         console.error('Proactive check error:', err)
       } finally {

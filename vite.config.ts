@@ -22,6 +22,7 @@ export default defineConfig({
         onboarding: resolve(__dirname, 'onboarding.html'),
         companion: resolve(__dirname, 'companion.html'),
         chat: resolve(__dirname, 'chat.html'),
+        bubble: resolve(__dirname, 'bubble.html'),
         settings: resolve(__dirname, 'settings.html'),
       },
     },

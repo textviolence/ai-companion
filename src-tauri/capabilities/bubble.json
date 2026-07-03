@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "bubble",
+  "description": "Bubble: HTTP requests to the TTS provider for speaking the proactive message, and hiding its own window.",
+  "windows": ["bubble"],
+  "permissions": [
+    "core:window:allow-hide",
+    {
+      "identifier": "http:default",
+      "allow": [{ "url": "http://**" }, { "url": "https://**" }]
+    }
+  ]
+}

@@ -3,7 +3,8 @@ import { emit, listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Card } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
-import { EVENT_ASK_REQUESTED, EVENT_PROACTIVE_START, EVENT_SETTINGS_UPDATED, EVENT_STATE_CHANGED } from '../shared/events'
+import { cn } from '@/lib/utils'
+import { EVENT_ASK_REQUESTED, EVENT_SETTINGS_UPDATED, EVENT_STATE_CHANGED } from '../shared/events'
 import { streamChatCompletion, type ChatMessage } from '../shared/llm'
 import { appendExchange, extractFact, loadMemory } from '../shared/memory'
 import { DEFAULT_SETTINGS, loadSettings, type AppSettings } from '../shared/settings'
@@ -13,10 +14,14 @@ const AUTO_HIDE_MS = 20_000
 
 type Phase = 'input' | 'streaming' | 'done' | 'error'
 
+function messageText(content: ChatMessage['content']): string {
+  return typeof content === 'string' ? content : content.map((part) => (part.type === 'text' ? part.text : '')).join('')
+}
+
 export function Chat() {
   const [draft, setDraft] = useState('')
-  const [question, setQuestion] = useState('')
-  const [answer, setAnswer] = useState('')
+  const [history, setHistory] = useState<ChatMessage[]>([])
+  const [streamingAnswer, setStreamingAnswer] = useState('')
   const [error, setError] = useState('')
   const [ttsError, setTtsError] = useState('')
   const [phase, setPhase] = useState<Phase>('input')
@@ -26,6 +31,7 @@ export function Chat() {
   const abortRef = useRef<AbortController | null>(null)
   const hideTimerRef = useRef<number | undefined>(undefined)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const generationRef = useRef(0)
 
   const clearHideTimer = useCallback(() => {
@@ -79,11 +85,14 @@ export function Chat() {
     interruptCurrent()
     inFlightRef.current = false
     setDraft('')
-    setQuestion('')
-    setAnswer('')
+    setStreamingAnswer('')
     setError('')
     setTtsError('')
     setPhase('input')
+    loadMemory().then(
+      (memory) => setHistory(memory.history),
+      (err) => console.error('Failed to load memory:', err),
+    )
     textareaRef.current?.focus()
   }, [interruptCurrent])
 
@@ -93,21 +102,6 @@ export function Chat() {
       .hide()
       .catch((err) => console.error('Failed to hide chat window:', err))
   }, [interruptCurrent])
-
-  const showProactiveTopic = useCallback(
-    (topic: string) => {
-      const generation = interruptCurrent()
-      inFlightRef.current = false
-      setDraft('')
-      setQuestion('')
-      setAnswer(topic)
-      setError('')
-      setTtsError('')
-      setPhase('done')
-      finishAnswer(settingsRef.current, topic, generation)
-    },
-    [interruptCurrent, finishAnswer],
-  )
 
   useEffect(() => {
     loadSettings().then(
@@ -120,13 +114,16 @@ export function Chat() {
       settingsRef.current = event.payload
     })
     const unlistenAsk = listen(EVENT_ASK_REQUESTED, resetForNewQuestion)
-    const unlistenProactive = listen<string>(EVENT_PROACTIVE_START, (event) => showProactiveTopic(event.payload))
     return () => {
       unlistenSettings.then((fn) => fn())
       unlistenAsk.then((fn) => fn())
-      unlistenProactive.then((fn) => fn())
     }
-  }, [resetForNewQuestion, showProactiveTopic])
+  }, [resetForNewQuestion])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [history, streamingAnswer, error])
 
   const send = useCallback(async () => {
     const text = draft.trim()
@@ -139,9 +136,9 @@ export function Chat() {
     const controller = new AbortController()
     abortRef.current = controller
 
-    setQuestion(text)
+    setHistory((prev) => [...prev, { role: 'user', content: text }])
     setDraft('')
-    setAnswer('')
+    setStreamingAnswer('')
     setError('')
     setTtsError('')
     setPhase('streaming')
@@ -166,10 +163,12 @@ export function Chat() {
       const full = await streamChatCompletion(
         settings.llm,
         messages,
-        (token) => setAnswer((prev) => prev + token),
+        (token) => setStreamingAnswer((prev) => prev + token),
         controller.signal,
       )
       setPhase('done')
+      setHistory((prev) => [...prev, { role: 'assistant', content: full }])
+      setStreamingAnswer('')
       await appendExchange(text, full)
       finishAnswer(settings, full, generation)
       extractFact(settings.llm, text, full).catch((err) => console.error('Fact extraction failed:', err))
@@ -217,15 +216,26 @@ export function Chat() {
           }}
           onKeyDown={handleKeyDown}
         />
-        <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto">
-          {question && (
-            <div className="ml-auto max-w-[90%] whitespace-pre-wrap break-words rounded-2xl rounded-br-sm bg-primary px-3 py-1.5 text-sm text-primary-foreground">
-              {question}
-            </div>
+        <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto" ref={scrollRef}>
+          {history.length === 0 && phase === 'input' && !streamingAnswer && (
+            <div className="text-xs text-muted-foreground">Shift+Enter for a new line</div>
           )}
-          {(answer || phase === 'streaming') && (
+          {history.map((message, index) => (
+            <div
+              key={index}
+              className={cn(
+                'max-w-[90%] whitespace-pre-wrap break-words rounded-2xl px-3 py-1.5 text-sm',
+                message.role === 'user'
+                  ? 'ml-auto rounded-br-sm bg-primary text-primary-foreground'
+                  : 'mr-auto max-w-[95%] rounded-bl-sm bg-muted',
+              )}
+            >
+              {messageText(message.content)}
+            </div>
+          ))}
+          {(streamingAnswer || phase === 'streaming') && (
             <div className="mr-auto max-w-[95%] whitespace-pre-wrap break-words rounded-2xl rounded-bl-sm bg-muted px-3 py-1.5 text-sm">
-              {answer}
+              {streamingAnswer}
               {phase === 'streaming' && (
                 <span className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse bg-foreground align-text-bottom" />
               )}
@@ -241,7 +251,6 @@ export function Chat() {
               🔇 Voice failed: {ttsError}
             </div>
           )}
-          {phase === 'input' && !question && <div className="text-xs text-muted-foreground">Shift+Enter for a new line</div>}
         </div>
       </Card>
     </div>
