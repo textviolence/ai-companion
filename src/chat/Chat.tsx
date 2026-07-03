@@ -3,7 +3,7 @@ import { emit, listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Card } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
-import { EVENT_ASK_REQUESTED, EVENT_SETTINGS_UPDATED, EVENT_STATE_CHANGED } from '../shared/events'
+import { EVENT_ASK_REQUESTED, EVENT_PROACTIVE_START, EVENT_SETTINGS_UPDATED, EVENT_STATE_CHANGED } from '../shared/events'
 import { streamChatCompletion, type ChatMessage } from '../shared/llm'
 import { appendExchange, extractFact, loadMemory } from '../shared/memory'
 import { DEFAULT_SETTINGS, loadSettings, type AppSettings } from '../shared/settings'
@@ -43,11 +43,34 @@ export function Chat() {
     }, AUTO_HIDE_MS)
   }, [clearHideTimer])
 
-  const resetForNewQuestion = useCallback(() => {
+  const interruptCurrent = useCallback(() => {
     generationRef.current += 1
     abortRef.current?.abort()
     stopSpeech()
     clearHideTimer()
+    return generationRef.current
+  }, [clearHideTimer])
+
+  const finishAnswer = useCallback(
+    (settings: AppSettings, text: string, generation: number) => {
+      if (settings.tts.enabled && settings.tts.apiKey) {
+        speak(settings.tts, text)
+          .catch((err) => {
+            console.error('Speech failed:', err)
+            setTtsError(err instanceof Error ? err.message : String(err))
+          })
+          .finally(() => {
+            if (generationRef.current === generation) scheduleHide()
+          })
+      } else {
+        scheduleHide()
+      }
+    },
+    [scheduleHide],
+  )
+
+  const resetForNewQuestion = useCallback(() => {
+    interruptCurrent()
     inFlightRef.current = false
     setDraft('')
     setQuestion('')
@@ -56,17 +79,29 @@ export function Chat() {
     setTtsError('')
     setPhase('input')
     textareaRef.current?.focus()
-  }, [clearHideTimer])
+  }, [interruptCurrent])
 
   const hideChat = useCallback(() => {
-    generationRef.current += 1
-    abortRef.current?.abort()
-    stopSpeech()
-    clearHideTimer()
+    interruptCurrent()
     getCurrentWindow()
       .hide()
       .catch((err) => console.error('Failed to hide chat window:', err))
-  }, [clearHideTimer])
+  }, [interruptCurrent])
+
+  const showProactiveTopic = useCallback(
+    (topic: string) => {
+      const generation = interruptCurrent()
+      inFlightRef.current = false
+      setDraft('')
+      setQuestion('')
+      setAnswer(topic)
+      setError('')
+      setTtsError('')
+      setPhase('done')
+      finishAnswer(settingsRef.current, topic, generation)
+    },
+    [interruptCurrent, finishAnswer],
+  )
 
   useEffect(() => {
     loadSettings().then(
@@ -79,11 +114,13 @@ export function Chat() {
       settingsRef.current = event.payload
     })
     const unlistenAsk = listen(EVENT_ASK_REQUESTED, resetForNewQuestion)
+    const unlistenProactive = listen<string>(EVENT_PROACTIVE_START, (event) => showProactiveTopic(event.payload))
     return () => {
       unlistenSettings.then((fn) => fn())
       unlistenAsk.then((fn) => fn())
+      unlistenProactive.then((fn) => fn())
     }
-  }, [resetForNewQuestion])
+  }, [resetForNewQuestion, showProactiveTopic])
 
   const send = useCallback(async () => {
     const text = draft.trim()
@@ -128,18 +165,7 @@ export function Chat() {
       )
       setPhase('done')
       await appendExchange(text, full)
-      if (settings.tts.enabled && settings.tts.apiKey) {
-        speak(settings.tts, full)
-          .catch((err) => {
-            console.error('Speech failed:', err)
-            setTtsError(err instanceof Error ? err.message : String(err))
-          })
-          .finally(() => {
-            if (generationRef.current === generation) scheduleHide()
-          })
-      } else {
-        scheduleHide()
-      }
+      finishAnswer(settings, full, generation)
       extractFact(settings.llm, text, full).catch((err) => console.error('Fact extraction failed:', err))
     } catch (err) {
       if (!controller.signal.aborted) {
@@ -152,7 +178,7 @@ export function Chat() {
       inFlightRef.current = false
       await emit(EVENT_STATE_CHANGED, 'idle')
     }
-  }, [draft, clearHideTimer, scheduleHide])
+  }, [draft, clearHideTimer, scheduleHide, finishAnswer])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {

@@ -7,8 +7,11 @@ import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { message } from '@tauri-apps/plugin-dialog'
 import { register, unregisterAll, type ShortcutEvent } from '@tauri-apps/plugin-global-shortcut'
 import { exit } from '@tauri-apps/plugin-process'
-import { EVENT_ASK_REQUESTED, EVENT_SETTINGS_UPDATED, EVENT_STATE_CHANGED, type CompanionState } from '../shared/events'
+import { EVENT_ASK_REQUESTED, EVENT_PROACTIVE_START, EVENT_SETTINGS_UPDATED, EVENT_STATE_CHANGED, type CompanionState } from '../shared/events'
 import { imageUrl } from '../shared/images'
+import { appendAssistantMessage } from '../shared/memory'
+import { checkProactiveMoment } from '../shared/proactive'
+import { captureScreen } from '../shared/screenshot'
 import { loadSettings, type AppSettings } from '../shared/settings'
 
 const MAX_SIDE = 240
@@ -30,10 +33,8 @@ async function openSettingsWindow(): Promise<void> {
   await settingsWindow?.setFocus()
 }
 
-async function openChatWindow(): Promise<void> {
+async function positionChatWindow(chat: WebviewWindow): Promise<void> {
   const companion = getCurrentWindow()
-  const chat = await WebviewWindow.getByLabel('chat')
-  if (!chat) return
   const [position, size, monitor, scale] = await Promise.all([
     companion.outerPosition(),
     companion.outerSize(),
@@ -52,7 +53,22 @@ async function openChatWindow(): Promise<void> {
     y = Math.min(Math.max(y, area.position.y), area.position.y + area.size.height - chatH)
   }
   await chat.setPosition(new PhysicalPosition(x, y))
+}
+
+async function openChatWindow(): Promise<void> {
+  const chat = await WebviewWindow.getByLabel('chat')
+  if (!chat) return
+  await positionChatWindow(chat)
   await emit(EVENT_ASK_REQUESTED)
+  await chat.show()
+  await chat.setFocus()
+}
+
+async function openChatWindowWithTopic(topic: string): Promise<void> {
+  const chat = await WebviewWindow.getByLabel('chat')
+  if (!chat) return
+  await positionChatWindow(chat)
+  await emit(EVENT_PROACTIVE_START, topic)
   await chat.show()
   await chat.setFocus()
 }
@@ -65,6 +81,8 @@ export function Companion() {
 
   const settingsRef = useRef(settings)
   settingsRef.current = settings
+  const stateRef = useRef(state)
+  stateRef.current = state
   const maskRef = useRef<ImageData | null>(null)
   const sizeRef = useRef<DisplaySize | null>(null)
   const positionedRef = useRef(false)
@@ -157,6 +175,34 @@ export function Companion() {
     }, HIT_TEST_INTERVAL_MS)
     return () => window.clearInterval(id)
   }, [])
+
+  useEffect(() => {
+    const enabled = settings?.proactive.enabled
+    const minutes = settings?.proactive.intervalMinutes
+    if (!enabled || !minutes) return
+    let busy = false
+    const id = window.setInterval(async () => {
+      if (busy || stateRef.current === 'thinking') return
+      busy = true
+      try {
+        const chat = await WebviewWindow.getByLabel('chat')
+        if (!chat || (await chat.isVisible())) return
+        const cfg = settingsRef.current
+        if (!cfg) return
+        const dataUrl = await captureScreen()
+        const topic = await checkProactiveMoment(cfg.llm, cfg.behavior.systemPrompt, dataUrl)
+        if (!topic) return
+        if (await chat.isVisible()) return
+        await appendAssistantMessage(topic)
+        await openChatWindowWithTopic(topic)
+      } catch (err) {
+        console.error('Proactive check error:', err)
+      } finally {
+        busy = false
+      }
+    }, minutes * 60_000)
+    return () => window.clearInterval(id)
+  }, [settings?.proactive.enabled, settings?.proactive.intervalMinutes])
 
   const handleImageLoad = useCallback(async (event: React.SyntheticEvent<HTMLImageElement>) => {
     const img = event.currentTarget

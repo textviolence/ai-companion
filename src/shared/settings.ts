@@ -26,11 +26,17 @@ export interface ImageSettings {
   thinking: string
 }
 
+export interface ProactiveSettings {
+  enabled: boolean
+  intervalMinutes: number
+}
+
 export interface AppSettings {
   llm: LlmSettings
   tts: TtsSettings
   behavior: BehaviorSettings
   images: ImageSettings
+  proactive: ProactiveSettings
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -54,6 +60,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
     companion: '',
     thinking: '',
   },
+  proactive: {
+    enabled: false,
+    intervalMinutes: 30,
+  },
 }
 
 const DPAPI_PREFIX = 'dpapi:v1:'
@@ -72,6 +82,7 @@ export function mergeSettings(saved: Partial<AppSettings> | undefined): AppSetti
     tts: { ...DEFAULT_SETTINGS.tts, ...saved?.tts },
     behavior: { ...DEFAULT_SETTINGS.behavior, ...saved?.behavior },
     images: { ...DEFAULT_SETTINGS.images, ...saved?.images },
+    proactive: { ...DEFAULT_SETTINGS.proactive, ...saved?.proactive },
   }
 }
 

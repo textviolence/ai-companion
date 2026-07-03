@@ -1,6 +1,6 @@
 [package]
 name = "ai-companion"
-version = "0.1.1"
+version = "0.2.0"
 description = "Desktop AI companion"
 edition = "2021"
 
@@ -23,3 +23,5 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-http = "2"
 tauri-plugin-process = "2"
 windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
+xcap = "0.9"
+image = "0.25"

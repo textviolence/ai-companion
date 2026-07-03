@@ -37,6 +37,14 @@ export async function appendExchange(question: string, answer: string): Promise<
   await store.save()
 }
 
+export async function appendAssistantMessage(content: string): Promise<void> {
+  const store = await memoryStore()
+  const { history } = await loadMemory()
+  const updated = [...history, { role: 'assistant' as const, content }].slice(-HISTORY_LIMIT)
+  await store.set('history', updated)
+  await store.save()
+}
+
 const FACT_SYSTEM_PROMPT = `You extract long-term facts about the user from their conversation with an assistant.
 If a new memorable fact about the user appeared in the conversation (name, preferences, job, family, etc.), respond strictly in the format:
 FACT: <one short fact>

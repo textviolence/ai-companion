@@ -1,4 +1,5 @@
 mod dpapi;
+mod screenshot;
 
 use tauri::Manager;
 
@@ -27,7 +28,8 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             dpapi::dpapi_protect,
-            dpapi::dpapi_unprotect
+            dpapi::dpapi_unprotect,
+            screenshot::capture_screenshot
         ])
         .setup(|app| {
             let label = if has_companion_image(app) {

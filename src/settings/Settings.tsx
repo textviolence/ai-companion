@@ -250,6 +250,29 @@ export function Settings() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-base">Proactive check-ins</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <SwitchRow
+            id="proactive-enabled"
+            label="Occasionally check in based on what's on screen"
+            checked={settings.proactive.enabled}
+            onCheckedChange={(checked) => update('proactive', { enabled: checked })}
+          />
+          <Field label="Check interval (minutes)" htmlFor="proactive-interval">
+            <Input
+              id="proactive-interval"
+              type="number"
+              min={1}
+              value={settings.proactive.intervalMinutes}
+              onChange={(event) => update('proactive', { intervalMinutes: Math.max(1, Number(event.target.value) || 1) })}
+            />
+          </Field>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-base">Images</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4">
