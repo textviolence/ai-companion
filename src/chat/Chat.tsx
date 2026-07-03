@@ -18,6 +18,7 @@ export function Chat() {
   const [question, setQuestion] = useState('')
   const [answer, setAnswer] = useState('')
   const [error, setError] = useState('')
+  const [ttsError, setTtsError] = useState('')
   const [phase, setPhase] = useState<Phase>('input')
 
   const settingsRef = useRef<AppSettings>(DEFAULT_SETTINGS)
@@ -50,6 +51,7 @@ export function Chat() {
     setQuestion('')
     setAnswer('')
     setError('')
+    setTtsError('')
     setPhase('input')
     textareaRef.current?.focus()
   }, [clearHideTimer])
@@ -93,6 +95,7 @@ export function Chat() {
     setDraft('')
     setAnswer('')
     setError('')
+    setTtsError('')
     setPhase('streaming')
     await emit(EVENT_STATE_CHANGED, 'thinking')
 
@@ -122,7 +125,10 @@ export function Chat() {
       scheduleHide()
       await appendExchange(text, full)
       if (settings.tts.enabled && settings.tts.apiKey) {
-        speak(settings.tts, full).catch((err) => console.error('Speech failed:', err))
+        speak(settings.tts, full).catch((err) => {
+          console.error('Speech failed:', err)
+          setTtsError(err instanceof Error ? err.message : String(err))
+        })
       }
       extractFact(settings.llm, text, full).catch((err) => console.error('Fact extraction failed:', err))
     } catch (err) {
@@ -186,6 +192,11 @@ export function Chat() {
           {phase === 'error' && (
             <div className="mr-auto max-w-[95%] whitespace-pre-wrap break-words rounded-2xl rounded-bl-sm bg-destructive/10 px-3 py-1.5 text-sm text-destructive">
               {error}
+            </div>
+          )}
+          {ttsError && (
+            <div className="mr-auto max-w-[95%] whitespace-pre-wrap break-words rounded-2xl rounded-bl-sm bg-destructive/10 px-3 py-1 text-xs text-destructive">
+              🔇 Voice failed: {ttsError}
             </div>
           )}
           {phase === 'input' && !question && <div className="text-xs text-muted-foreground">Shift+Enter for a new line</div>}
